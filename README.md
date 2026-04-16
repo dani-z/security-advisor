@@ -218,7 +218,7 @@ security-advisor/
 ├── README.md
 ├── AGENTS.md                         # multi-agent entry point
 ├── HARNESSES.md                      # per-harness compatibility matrix
-└── LICENSE                           # MIT
+└── LICENSE                           # Apache 2.0
 ```
 
 Every `.<harness>/skills/security-advisor` directory is a **symlink** to `source/skills/security-advisor/`. Edit `source/`, everything follows. To regenerate the symlinks (e.g. after cloning on a system where git didn't preserve them, or after adding a new harness), run:

@@ -1,5 +1,7 @@
 # security-advisor
 
+![security-advisor — a magnifying glass over a code editor with one line highlighted, set against a grid of shield glyphs](image.png)
+
 A conversational security advisor **for every AI coding agent** — hunts real, exploitable vulnerabilities in your codebase, explains the exploit path, and lets you push back.
 
 Grounded in Anthropic's 2025/2026 safety research (Agents Rule of Two, Sleeper Agents, prompt-injection defences) and OWASP Top 10:2025 / OWASP LLM Top 10 2025.

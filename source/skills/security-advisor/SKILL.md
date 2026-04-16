@@ -11,7 +11,7 @@ description: |
   anxious before a production push. Grounded in Anthropic's 2025/2026 safety research
   (Agents Rule of Two, Sleeper Agents, prompt-injection defences) and OWASP Top 10:2025
   / OWASP LLM Top 10 2025. Complements /cso — this skill is a dialog, /cso is an audit.
-license: MIT
+license: Apache-2.0
 metadata:
   author: dani-z
   version: "1.0.0"

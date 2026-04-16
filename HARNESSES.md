@@ -44,7 +44,7 @@ From the Agent Skills spec, this skill uses:
 |-------|-------|--------------|
 | `name`* | `security-advisor` | All harnesses |
 | `description`* | Pushy trigger sentence + research grounding | All harnesses |
-| `license`* | `MIT` | Claude Code, Cursor, Copilot, Kiro, OpenCode, Pi, Rovo Dev |
+| `license`* | `Apache-2.0` | Claude Code, Cursor, Copilot, Kiro, OpenCode, Pi, Rovo Dev |
 | `metadata`* | `author`, `version` | Claude Code, Cursor, Copilot, Kiro, OpenCode, Pi, Rovo Dev |
 | `allowed-tools`* | `Bash`, `Read`, `Grep`, `Glob`, `WebSearch`, `AskUserQuestion`, `Agent` | Claude Code, OpenCode, Pi, Rovo Dev |
 

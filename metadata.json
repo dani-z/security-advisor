@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "author": "dani-z",
   "date": "April 2026",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "abstract": "Conversational security advisor for AI coding agents. Hunts real, exploitable vulnerabilities in a codebase, surfaces findings one at a time with a concrete file:line exploit path, and complements one-shot audit tools. Grounded in Anthropic's 2025/2026 safety research (Agents Rule of Two, Sleeper Agents, prompt-injection defences), OWASP Top 10:2025, and OWASP LLM Top 10 2025. Covers Next.js 2025 CVE list, React UI-layer XSS escape hatches, LLM-app surface (prompt injection, tool calling, unbounded consumption), Node/TS and Python general patterns, secrets hygiene, and dependency CVE matching. Progressive disclosure — main SKILL.md under 250 lines, 8 reference files loaded by stack detection.",
   "references": [
     "https://www.anthropic.com/research/prompt-injection-defenses",

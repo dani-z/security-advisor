@@ -31,7 +31,7 @@ security-advisor/
 ├── README.md
 ├── AGENTS.md                         # this file
 ├── HARNESSES.md                      # harness compatibility matrix
-└── LICENSE                           # MIT
+└── LICENSE                           # Apache 2.0
 ```
 
 Every `.<harness>/skills/security-advisor` directory is a symlink to `source/skills/security-advisor/`. Edit `source/`, everything else follows automatically.
@@ -56,4 +56,4 @@ npx skills add dani-z/security-advisor -g
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE).

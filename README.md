@@ -46,7 +46,9 @@ npx skills add dani-z/security-advisor -a gemini
 npx skills add dani-z/security-advisor -g --all -y
 ```
 
-See [skills.sh](https://skills.sh/) for the full CLI reference.
+See [skills.sh](https://skills.sh/) or run `npx skills --help` for the full CLI reference.
+
+**What is skills.sh?** Vercel's open registry for Agent Skills. It auto-discovers any public GitHub repo following the [Agent Skills spec](https://agentskills.io/specification) and makes it installable via `npx skills add`. No submission required — you publish by pushing to GitHub. Ranking comes from install telemetry.
 
 ### Option B — clone into a project
 
@@ -87,6 +89,8 @@ Grab the latest release's `security-advisor.skill` bundle and unzip into your ha
 unzip security-advisor.skill -d ~/.claude/skills/   # or .cursor/skills, .codex/skills, etc.
 ```
 
+**Note for Windows users:** On Windows, extract the `.skill` bundle using your preferred unzip tool (7-Zip, WinRAR, or `tar` if available), as symlinks inside the bundle may not extract correctly with the default Windows unzip handler.
+
 ---
 
 ## Usage
@@ -116,6 +120,25 @@ Just ask for a security review. The skill description is engineered to auto-trig
 | `/security-advisor --report` | Also write findings to `.security-advisor/report-YYYY-MM-DD.md` |
 
 Flags combine: `/security-advisor --full --report`. Harnesses that don't support slash-command arguments (Cursor, Gemini, Kiro) — ask in plain language: *"Run a full audit and write a report"*.
+
+### Harness compatibility matrix
+
+| Harness | Slash-command args | Auto-trigger on phrases |
+|---------|:--:|:--:|
+| Claude Code | ✅ | ✅ |
+| OpenCode | ✅ | ✅ |
+| Codex | ✅ | ✅ |
+| Cursor | ❌ (use prose) | ✅ |
+| Gemini CLI | ❌ (use prose) | ✅ |
+| Kiro | ❌ (use prose) | ✅ |
+| GitHub Copilot Agents | ❌ (use prose) | ✅ |
+| Pi | ✅ | ✅ |
+| Rovo Dev | ✅ | ✅ |
+| Trae / Trae China | ✅ | ✅ |
+
+### Diff vs full scan
+
+By default, `/security-advisor` scans only your current branch's diff against `main`. This is fast and targeted — good for PR reviews. If your repo has no `main` branch or the diff is empty, the skill automatically upgrades to a full repo scan.
 
 ---
 
@@ -314,7 +337,7 @@ There's no submission — any public GitHub repo following the Agent Skills form
 
 1. Push this directory to a public GitHub repo.
 2. Tag a release (`v1.0.0`) — optional but good hygiene; matches `metadata.version`.
-3. Test the install: `npx skills add <you>/security-advisor -g -a claude-code -y` on a clean machine.
+3. Test the install: `npx skills add <you>/security-advisor -a claude-code -y` on a clean machine (omit `-g` to test project-level install; the wizard will offer both).
 4. Bump `metadata.version` in both `source/skills/security-advisor/SKILL.md` frontmatter and `source/skills/security-advisor/metadata.json` on each update so `npx skills update` detects it.
 5. (Optional) Open a PR to [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) to be featured in Vercel's curated set.
 

@@ -294,10 +294,10 @@ Follow-up menu via `AskUserQuestion` in Claude Code; plain-text prompts in other
 
 ## Complementary tools
 
-- `/cso` (gstack) — deeper 14-phase audit with JSON report output.
-- `gitleaks` / `trufflehog` — dedicated secret scanners.
-- `semgrep` / `codeql` — static taint analysis at scale.
-- `npm audit` / `bun outdated` / `pip audit` — dependency CVE matching.
+- [`/cso`](https://github.com/garrytan/gstack/tree/main/cso) ([gstack](https://github.com/garrytan/gstack)) — deeper 14-phase audit with JSON report output.
+- [`gitleaks`](https://github.com/gitleaks/gitleaks) / [`trufflehog`](https://github.com/trufflesecurity/trufflehog) — dedicated secret scanners.
+- [`semgrep`](https://github.com/semgrep/semgrep) / [`codeql`](https://github.com/github/codeql) — static taint analysis at scale.
+- [`npm audit`](https://github.com/npm/cli) / [`bun outdated`](https://github.com/oven-sh/bun) / [`pip audit`](https://github.com/pypa/pip-audit) — dependency CVE matching.
 
 security-advisor does the reasoning these tools can't. Use them together.
 

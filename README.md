@@ -339,4 +339,4 @@ npx skills update security-advisor
 
 ## License
 
-MIT. Use it, fork it, improve it. See [LICENSE](LICENSE).
+See [LICENSE](LICENSE).

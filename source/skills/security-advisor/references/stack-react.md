@@ -240,7 +240,39 @@ CSP is a framework concern (covered in `stack-nextjs.md` section 7 for Next.js).
 
 ---
 
-## 12. React-specific quick wins checklist
+## 12. Tabnabbing — `target="_blank"` without `rel="noopener noreferrer"`
+
+```jsx
+<a href={externalUrl} target="_blank">See more</a>
+```
+
+When a user clicks this, the opened page receives `window.opener` — it can then do `window.opener.location = 'https://phishing.example.com/fake-login'`, silently replacing the original tab with a phishing clone while the user is distracted by the new tab.
+
+Modern browsers default `noopener` for `target="_blank"` on anchor elements since ~2021. But:
+- Older bundles, older React versions, React Native `WebView`s with custom link handling — still affected.
+- `window.open(url, '_blank')` in JS does NOT get the browser default — explicit `'noopener,noreferrer'` required.
+- `<form target="_blank">` and `<area target="_blank">` likewise not defaulted.
+
+Grep:
+```
+target="_blank"
+window\.open\(
+```
+
+For each match, verify `rel="noopener noreferrer"` is present. Severity: MEDIUM (phishing enabler). HIGH when combined with any path where an attacker can inject a target URL into trusted-looking UI (comments, user profiles).
+
+---
+
+## 13. Client-side path traversal / bundler exposure
+
+- **Source maps in production.** `.map` files shipped to prod give attackers the original source, including comments and sometimes commented-out secrets. Verify the production build strips source maps or restricts them to authenticated users. MEDIUM if sensitive app logic is revealed; LOW for open-source.
+- **Client-side path operations** — `fetch('/api/' + file)` where `file` comes from a route param and the server uses it directly in a filesystem op is an open-redirect-like path-traversal. The bug is on the server, but the client-side code is where you notice it.
+- **Service Worker cache poisoning** — an XSS that runs before the SW is registered can install a malicious SW that intercepts every subsequent fetch. Always-a-finding = XSS. The SW itself amplifies impact.
+- **Trusted Types** (CSP `require-trusted-types-for 'script'`) — when present, verify the app defines policies and doesn't escape them via `trustedTypes.createPolicy('default', {...})` that just passes input through. INFORMATIONAL.
+
+---
+
+## 14. React-specific quick wins checklist
 
 Run these whenever React is detected:
 
@@ -254,6 +286,8 @@ Run these whenever React is detected:
 8. If markdown / rich text rendering exists, verify sanitisation path.
 9. For React Native: audit `WebView`, deep links, `AsyncStorage` usage.
 10. Check the deploy config for CSP headers.
+11. Grep `target="_blank"` and `window.open(` — each needs `rel="noopener noreferrer"` / `'noopener,noreferrer'`.
+12. Check prod build output for `.map` files / source-map exposure.
 
 ---
 

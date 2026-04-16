@@ -60,6 +60,40 @@ Combine all three and you have a path that can both be controlled by an attacker
 
 **Context only:** Up to $25k for universal jailbreaks. Not directly actionable for a code review, but useful to know: Anthropic treats prompt-injection robustness as a security property, not a capability property. So should you when reviewing LLM apps.
 
+### Many-shot jailbreaking (Apr 2024)
+**Source:** Anthropic — https://www.anthropic.com/research/many-shot-jailbreaking
+
+**Idea:** Long context windows let attackers prepend hundreds of fabricated "user asks / assistant complies" turns before their actual harmful request. Effective attack success scales with shot count, often surpassing single-shot jailbreaks.
+
+**How to apply:** When reviewing LLM apps, flag any feature that accepts multi-turn conversation imports, pasted transcripts, or uploaded chat histories without structural separation. The attacker's vehicle is long in-context demonstrations; the defence is treating imported content as data with explicit delimiters.
+
+### Claude Code PR-title 9.4 HackerOne (Oct 2025)
+**Source:** HackerOne disclosures across Claude Code / Gemini CLI / GitHub Copilot.
+
+**Idea:** Any developer-facing metadata (PR title, commit message, issue body, filename) that flows into an AI coding agent's context with tool access is an indirect-injection vector. CVSS 9.4 because it combined untrusted text + sensitive tools + external communication — all three of the Rule of Two.
+
+**How to apply:** When reviewing an LLM app, map every source of developer/user metadata into the LLM prompt. Each is a potential instruction-injection vector if the agent has tools. Defence is "quote as data" + tool-approval gates.
+
+### Model Context Protocol (MCP) security — 2024-2025
+**Source:** https://modelcontextprotocol.io, various community security write-ups.
+
+**Idea:** MCP is a protocol for letting LLMs connect to third-party tool servers. The tool definitions (name, description, schema) are inlined into the system prompt — meaning a compromised or malicious MCP server can inject instructions into any agent that connects to it. Tool responses are likewise appended to the conversation and can carry injection. Cross-server "confused deputy" attacks combine read-access from one server with write-access from another.
+
+**How to apply:** For any app using `@modelcontextprotocol/*` or hand-rolled MCP clients, audit which servers load, who controls them, whether tool names are namespaced, whether tool descriptions/results are treated as trusted, and what auth tokens each server receives. See `stack-llm-apps.md` LLM13.
+
+---
+
+## Supply-chain incidents that calibrate severity
+
+Supply-chain (OWASP 2025 A03, NEW) is now Top 3. Mention these specific incidents when a user pushes back:
+
+- **XZ Utils backdoor (CVE-2024-3094, Mar 2024)** — 2-year social-engineering campaign culminating in a backdoor in a near-universal Linux library. Lesson: build artefacts ≠ source; reproducible builds and provenance matter.
+- **tj-actions/changed-files (Mar 2025)** — GitHub Actions release tags moved to a malicious commit; thousands of repos exfiltrated secrets from CI. Lesson: pin third-party actions by commit SHA.
+- **`ua-parser-js`, `rc`, `coa`, `colors.js`, `event-stream`** (various 2018-2024) — maintainer-account takeover or maintainer-intentional sabotage. Lesson: 2FA on npm accounts, pin dep versions, use `npm audit signatures` / sigstore provenance.
+- **PyPI crypto-drainer typosquats** (ongoing 2023-2025) — waves of lookalike package names stealing wallet keys on install. Lesson: `--require-hashes` and scoped internal indexes.
+
+These are the canonical "this is not hypothetical" citations.
+
 ---
 
 ## OWASP Top 10 — 2025 edition

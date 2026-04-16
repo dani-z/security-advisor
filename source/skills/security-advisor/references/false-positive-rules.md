@@ -50,6 +50,26 @@ The rules below are in two parts: **hard exclusions** (silently drop), and **pre
 
 20. **Docker containers running as root** in `Dockerfile.dev` or `docker-compose.yml` for local dev only. Production Dockerfiles / K8s specs ARE a finding.
 
+21. **CSRF on GET-only endpoints.** GETs must not have side effects by HTTP spec; if a GET endpoint is idempotent and read-only, CSRF on it is not meaningful. If the GET has side effects (decrement balance, send email, etc.) — that's a spec violation AND a CSRF finding.
+
+22. **Tabnabbing on internal links.** See P19.
+
+23. **Open CORS on endpoints that return only non-sensitive public data AND do not set credentialed headers.** See P13.
+
+24. **"No query-complexity limit" on a GraphQL endpoint with trivial schema.** See P18.
+
+25. **LLM receiving user input with no tools and no unsafe output sink.** See P16.
+
+26. **MCP tool-shadowing risk on a single-server deployment.** See P23.
+
+27. **GH Actions `pull_request_target` without PR checkout.** See P21.
+
+28. **Stack traces in development-only error handlers** (gated on `NODE_ENV === 'development'`). Production path must sanitise; if it does, dev-time verbose errors are fine.
+
+29. **Host header trust in *internal* tooling** behind a VPN where the reverse proxy normalises `Host` to the canonical value. Flag only when public-facing + `Host` used in reset links / redirects / log attribution without proxy enforcement.
+
+30. **ZIP Slip / file-upload findings on a development-only admin utility** that's clearly not exposed to end users. If the extraction is from operator-supplied archives only (not user-uploaded), the attack surface is an insider-risk concern, not application vuln.
+
 ---
 
 ## Precedents — where intuition misleads
@@ -77,6 +97,30 @@ The rules below are in two parts: **hard exclusions** (silently drop), and **pre
 **P11. `NEXT_PUBLIC_` variables are client-exposed by design.** Only flag if the value stored there is actually a server secret. Public URLs, feature flag IDs, PostHog project keys, publishable Stripe keys, etc. — expected.
 
 **P12. "No rate limit on public endpoint" — think twice.** Most public endpoints on well-engineered apps have rate limiting at a layer the LLM can't see (CDN, WAF, Vercel Functions concurrency cap, Cloudflare). Ask the user where rate limiting lives before flagging.
+
+**P13. CORS `origin: true` on an anonymous read-only API is not a finding.** CORS reflection only hurts with credentials. A public JSON-blob API with `Allow-Credentials: false` and no session cookies is fine to CORS-allow from anywhere. Flag only when credentials (`Allow-Credentials: true`, cookie auth, or bearer tokens passed cross-origin) are combined with broad origin.
+
+**P14. `target="_blank"` in modern React codebases with a post-2021 build target.** Browsers default to `noopener` for anchor `target="_blank"` — so plain `<a target="_blank">` in a recent-compiled SPA is not a real-world tabnabbing exploit. Flag only: `window.open()` calls (no browser default), `<form target="_blank">`, React Native WebViews with custom link handling, and code targeting older browsers.
+
+**P15. CSRF on bearer-token-auth endpoints.** If the endpoint only accepts `Authorization: Bearer <token>` and reads the token from `localStorage` / memory, browsers don't send it cross-site. CSRF is not applicable (though localStorage brings its own XSS concerns — flag separately). CSRF concerns apply to *cookie-authenticated* endpoints.
+
+**P16. Prompt injection in an LLM app where the model cannot call tools and its output is rendered as plain text.** The attack surface is much narrower. Flag only when the model has tools OR its output reaches a HTML/SQL/eval sink. Pure-chat apps with text-only output and no tools rate LOW/INFORMATIONAL.
+
+**P17. CVE on a dependency whose affected function isn't called.** Mark UNVERIFIED + note the CVE, don't escalate to HIGH. But: if the CVE is RCE-class and the dep is loaded at boot (not lazy), default to HIGH because plausibility of reachability is higher than you can prove in a review.
+
+**P18. GraphQL without query complexity analysis** on a tiny schema with <20 types and no nested resolvers. Real amplification requires sufficient schema depth; flag only when the schema shape permits a multiplicative attack.
+
+**P19. Missing `rel="noopener"` on internal same-origin links.** Tabnabbing requires the opened page to be attacker-controlled. Links to `/dashboard` from the same app are not a finding.
+
+**P20. Docker container running as root in CI / build stage.** A multi-stage Dockerfile where the build stage is root but the final runtime image uses `USER nonroot` is fine. Only flag the FINAL image's user.
+
+**P21. GitHub Actions `pull_request_target` without PR code checkout.** `pull_request_target` by itself is safe — it runs the base branch's code, which has been reviewed. The dangerous combination is `pull_request_target` + checkout of PR `head.sha` + running PR-controlled scripts. Confirm both halves before flagging CRITICAL.
+
+**P22. Prompt-cache tenant leak claim.** Anthropic's prompt caching is tenant-scoped by default (cache key includes API key + content hash). Flag only if the code explicitly shares cache state across users (e.g. a shared service-account API key used for all tenants AND user content in the cached prefix) — that's a real leak. Absent explicit shared-cache pattern, default-safe.
+
+**P23. MCP server tool name collision** where the app hard-codes a single trusted MCP server. The cross-server confused-deputy threat only applies when multiple MCP servers coexist AND can influence each other. A single-server setup is not a finding for LLM13.
+
+**P24. Terraform with secrets in `variable "..."` default values.** If the defaults are `""` / `null` / template-placeholder values and real secrets come from `TF_VAR_*` env / Vault, no leak. Flag only when the default contains a plausible real secret AND the variable is used in production modules.
 
 ---
 

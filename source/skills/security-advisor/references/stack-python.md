@@ -80,6 +80,88 @@ Same principle as Node:
 
 ---
 
+## XXE — XML entity expansion
+
+Python XML libs often default-unsafe:
+- `xml.etree.ElementTree.parse(untrusted)` — historically resolved entities; safe since 3.7.1 but pinned-lower projects are exposed.
+- `lxml.etree.parse(untrusted)` — resolves entities by default. Must pass `parser=etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)`.
+- `xml.dom.minidom.parseString` — same class.
+- `xmltodict`, `xmlsec`, `pysaml2` — audit per-lib; SAML responses are attacker-controlled by definition.
+
+Exploit payload: see `stack-api-surface.md §9`. CRITICAL on any endpoint accepting XML (webhook receivers, SAML callbacks, SOAP).
+
+---
+
+## SSTI — Jinja2 / Mako / Django templates
+
+- `Environment().from_string(user_input).render()` = user-controlled template body → RCE via `{{ ''.__class__.__mro__[1].__subclasses__() }}` chain to `os.system`.
+- `render_template_string(user_input)` — Flask convenience for the same thing.
+- Django `Template(user_input)` + `.render(context)` — same.
+- `mark_safe(user_input)` — XSS, not RCE, but same family.
+
+Grep:
+```
+from_string\(   |  render_template_string\(   |  Template\(  .*user
+```
+
+CRITICAL when user input is the template body. MEDIUM when user input is a template *variable* (unless the template itself uses `|safe` / autoescape disabled).
+
+---
+
+## NoSQL injection (MongoDB / pymongo)
+
+```python
+users.find_one({"email": request.json["email"], "password": request.json["password"]})
+# attacker POSTs {"email": "admin@x.com", "password": {"$ne": null}} → auth bypass
+```
+
+Fix: coerce to str (`str(request.json["email"])`) or use Pydantic models that enforce `str` type. Verify the `BaseModel` has explicit string fields, not `Any` / `dict` for auth-relevant inputs.
+
+---
+
+## FastAPI — response_model field leakage
+
+```python
+@app.get("/me")
+async def me() -> dict:
+    return await db.users.find_one({...})   # returns everything, incl. password_hash
+```
+
+Without `response_model=UserPublicDTO`, FastAPI serialises whatever you return. Mass-return of ORM objects leaks `password_hash`, `stripe_customer_id`, internal fields.
+
+Flag endpoints that return ORM/DB objects directly without a `response_model` or a Pydantic DTO. Severity: HIGH if credentials leak; MEDIUM for PII.
+
+---
+
+## Django — additional checks
+
+- **`raw_query` / `extra(where=[user_input])`** — SQL injection under Django's ORM.
+- **`mark_safe(user_html)`** — XSS on render.
+- **`assert` in production code** — Python `-O` strips asserts; don't use for auth checks.
+- **`@csrf_exempt` decorator** — every use must have a reason.
+- **`django-admin` accessible in prod** — always behind VPN / staff auth.
+- **Pickle session backend** — `SESSION_SERIALIZER = 'django.contrib.sessions.serializers.PickleSerializer'` is the default prior to Django 1.6 upgrade guide; verify JSON serialiser.
+
+---
+
+## Flask — additional checks
+
+- **`debug=True`** anywhere reachable in production = Werkzeug debugger → authenticated RCE console at `/console`. CRITICAL.
+- **`render_template_string`** — see SSTI above.
+- **`send_file(user_filename)`** without `send_from_directory` — path traversal.
+- **`session` uses `SECRET_KEY` as signer** — if `SECRET_KEY` leaks or is a default, session forgery = full account takeover.
+
+---
+
+## FastAPI — additional checks
+
+- **Dependency injection auth bypass** — a route missing the auth `Depends(...)` is public. Easy to miss during refactors. Grep every route; every non-public route must have an auth dependency.
+- **CORS `allow_origins=["*"]` + `allow_credentials=True`** — starlette CORSMiddleware will happily accept this (despite the spec); browsers usually reject, but bugs happen. Flag anyway (see `stack-api-surface.md §2`).
+- **Background tasks** — tasks run with the auth of the caller but may write beyond the caller's scope. Audit any `background_tasks.add_task(...)` that touches sensitive state.
+- **WebSocket auth** — FastAPI WS handshake auth must be explicit; no default. See `stack-api-surface.md §14`.
+
+---
+
 ## If this file isn't enough
 
 If you find yourself hitting patterns this file doesn't cover (async web frameworks like Starlette, Tornado; data frameworks like FastAPI+SQLAlchemy+Celery combos; ML serving), tell the user: "Python coverage in this skill is brief — I'll apply general OWASP principles and flag anything that looks off, but a Python-specific security linter like `bandit` would complement this review well."

@@ -52,13 +52,37 @@ grep -n "authActionClient\|orgActionClient\|adminActionClient\|auth()\|getSessio
 ```
 1. Attacker signs up a normal account with email attacker@x.com.
 2. Attacker opens Network tab on their own dashboard, finds the POST
-   endpoint for "delete QR code" — notes the action ID in the request.
-3. Attacker crafts a POST to that endpoint with id: "<victim's QR code id>".
+   endpoint for a tenant-scoped mutation (e.g. "delete resource") —
+   notes the action ID in the request.
+3. Attacker crafts a POST to that endpoint with id: "<victim resource id>".
 4. If the action reads the id from parsedInput and only scopes by that id
-   (not by session.org.id), the victim's QR is deleted.
+   (not by session.org.id / session.user.id), the victim's resource is
+   deleted / read / modified.
 ```
 
 **Reference:** Next.js own data-security docs — https://nextjs.org/docs/app/guides/data-security
+
+### Server Actions — Origin / Host header enforcement
+
+Since Next 14, server actions enforce an Origin-vs-Host check to prevent cross-site invocation from arbitrary origins (browser-layer CSRF defence for actions). If `next.config.ts` sets:
+
+```ts
+experimental: {
+  serverActions: {
+    allowedOrigins: ['*']   // or an attacker-controlled pattern
+  }
+}
+```
+
+…the protection is disabled. Grep:
+
+```
+allowedOrigins
+```
+
+Any `'*'` / overly broad pattern = **HIGH**. Combined with a server action that mutates state = CRITICAL CSRF.
+
+Additionally, self-hosted deployments behind a reverse proxy should verify `X-Forwarded-Host` is not blindly trusted; Next.js relies on `Host` for the Origin check. If the proxy passes `Host` through from the client, an attacker can make any Origin "match".
 
 ---
 

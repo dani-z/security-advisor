@@ -29,7 +29,7 @@ Sources: [Next.js security bulletins](https://nextjs.org/blog), [NVD CVE-2025-29
 **What you must verify:**
 
 Every exported server action function re-authenticates inside itself. Either:
-- Uses `next-safe-action` with an authed client wrapper (e.g. `authActionClient.schema(...).action(...)`), OR
+- Uses an action-client library (e.g. a safe-action / RPC / tRPC-style wrapper) configured with an authed variant that injects the session into `ctx` before running the handler, OR
 - Manually calls `auth()` / `getSession()` inside the handler before any database work.
 
 **Grep patterns:**
@@ -37,14 +37,16 @@ Every exported server action function re-authenticates inside itself. Either:
 ```
 // find all exported server actions
 grep -rn "^\"use server\"" --include="*.ts" --include="*.tsx" src/
-// for each file, check for auth
-grep -n "authActionClient\|orgActionClient\|adminActionClient\|auth()\|getSession" <file>
+// for each file, check for auth — the specific client name will vary by
+// project; grep for the wrapper symbol(s) the repo uses, plus generic
+// session accessors
+grep -n "auth()\|getSession\|getServerSession\|<authed-wrapper-symbol>" <file>
 ```
 
 **Findings you're hunting for:**
-- A server action using the raw `createSafeActionClient()` / bare action — no auth middleware. **HIGH**.
-- A server action file where some actions use `authActionClient` and others use a bare client. **HIGH** for the bare ones.
-- A server action that reads `userId` / `organizationId` from `parsedInput` (i.e. the request body) instead of `ctx.user.id` / session. **CRITICAL** — IDOR across tenants.
+- A server action built on a bare / unauthenticated action-client factory — no auth middleware in the wrapper and no session check inside the handler. **HIGH**.
+- A server action file where some actions are built on an authed wrapper and others on a bare one. **HIGH** for the bare ones.
+- A server action that reads a tenant-scoping ID (e.g. `userId`, `tenantId`, `teamId`) from `parsedInput` / the request body instead of from the session / `ctx`. **CRITICAL** — IDOR across tenants.
 - An action that returns full user/org objects (with sensitive fields) to the client. **MEDIUM** — info disclosure.
 
 **Exploit example (template):**
@@ -56,7 +58,7 @@ grep -n "authActionClient\|orgActionClient\|adminActionClient\|auth()\|getSessio
    notes the action ID in the request.
 3. Attacker crafts a POST to that endpoint with id: "<victim resource id>".
 4. If the action reads the id from parsedInput and only scopes by that id
-   (not by session.org.id / session.user.id), the victim's resource is
+   (not by the session-derived tenant / user id), the victim's resource is
    deleted / read / modified.
 ```
 
@@ -99,7 +101,7 @@ grep -rn "queryRawUnsafe\|executeRawUnsafe" --include="*.ts" src/
 ```
 
 ### Mass assignment
-Any `prisma.<model>.create({ data: body })` or `.update({ data: { ...body } })` where `body` is a request body is a **HIGH** finding. The client can set `role`, `isAdmin`, `organizationId`, `stripeCustomerId`, anything the schema allows. Schemas must whitelist fields explicitly (Zod `.pick()` before passing to Prisma).
+Any `prisma.<model>.create({ data: body })` or `.update({ data: { ...body } })` where `body` is a request body is a **HIGH** finding. The client can set `role`, `isAdmin`, the tenant-scoping column, `stripeCustomerId`, anything the schema allows. Schemas must whitelist fields explicitly (Zod `.pick()` before passing to Prisma).
 
 Grep:
 ```
@@ -107,7 +109,7 @@ grep -rn "data: \({\s*\.\.\.\|body\)" --include="*.ts" src/
 ```
 
 ### Tenant scoping
-Every multi-tenant query (`where: { userId }`, `where: { organizationId }`, `where: { teamId }`) must source the scoping value from the authenticated session, never from request input. Verify by reading the callers.
+Every multi-tenant query (e.g. `where: { userId }`, `where: { tenantId }`, `where: { teamId }`, `where: { workspaceId }` — whichever column the schema uses) must source the scoping value from the authenticated session, never from request input. Verify by reading the callers.
 
 ### Good patterns to confirm, not flag
 - `const user = await requireUser(); prisma.x.findFirst({ where: { userId: user.id, id } })` — good.
@@ -207,7 +209,7 @@ For each route handler:
 5. Grep for `data: { ...` in Prisma calls → verify no mass assignment from request bodies.
 6. Find the Stripe webhook handler → verify raw body + `constructEvent` + idempotency.
 7. Read `next.config.ts` → check for security headers function.
-8. Grep for `"use server"` files in route handlers (legacy) or bare `createSafeActionClient()` (no auth wrapper).
+8. Grep for `"use server"` files in route handlers (legacy) or server actions built on a bare / unauthenticated action-client factory with no auth wrapper.
 9. Check `.env.example` → does it have real-looking values? Check `git log -p -- .env.example`.
 10. Grep `NEXT_PUBLIC_` → does any entry look like a server secret?
 

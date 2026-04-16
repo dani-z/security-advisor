@@ -1,4 +1,4 @@
-# security-advisor
+# Security Advisor
 
 ![security-advisor — a magnifying glass over a code editor with one line highlighted, set against a grid of shield glyphs](image.jpg)
 

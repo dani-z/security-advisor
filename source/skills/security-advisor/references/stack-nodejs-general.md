@@ -157,3 +157,45 @@ Same patterns as Express largely. Key differences:
 - Fastify has a schema validation system baked in — flag routes without a `schema:` entry as MEDIUM.
 - Hono's `c.req.header('...')` — headers are trivially spoofed; never use `x-forwarded-for` or `x-real-ip` for auth decisions.
 - Bun's `Bun.serve` — similar to Node HTTP; audit as such.
+
+---
+
+## NoSQL injection (Mongo, Redis, Elasticsearch)
+
+If the project uses `mongodb` / `mongoose`: user bodies typed as `any` / spread directly into queries let attackers inject operators (`$ne`, `$gt`, `$regex`). See `stack-api-surface.md §7` for the full pattern and fix. Quick grep:
+
+```
+findOne\(\s*req\.body
+find\(\s*req\.body
+```
+
+Any typeless spread of a request body into a `find` / `update` is **HIGH → CRITICAL** if authentication is downstream.
+
+---
+
+## ZIP Slip / archive extraction
+
+If the project extracts archives (`adm-zip`, `yauzl`, `unzipper`, `tar`, `node-stream-zip`, `7zip-bin`), every loop that uses the archive entry name in a filesystem path is ZIP Slip. See `stack-api-surface.md §11`. Grep:
+
+```
+adm-zip | unzipper | yauzl | node-stream-zip
+path\.join\([^,]+,\s*entry\.
+```
+
+---
+
+## SSRF — DNS rebinding & redirect bypass
+
+Basic SSRF is above. Additional variants to check (detail in `stack-api-surface.md §12`):
+- **DNS rebinding:** allowlist checks host; `fetch` separately resolves DNS. Defence: resolve once, dial by IP.
+- **Redirect-based bypass:** `http://allowed.com/r` 302s to `http://169.254.169.254/`. Defence: `redirect: 'manual'` or re-check on each hop.
+- **IMDSv1 on EC2:** any SSRF leaks AWS creds unless `http_tokens = required` is set in Terraform.
+
+---
+
+## Supply-chain install-time risk
+
+- `npm install` runs every dep's `preinstall`/`postinstall`/`prepare` script. See `stack-cicd-supply-chain.md §2`.
+- Verify `.npmrc` with `ignore-scripts=true` or explicit allowlist for projects with large dep trees.
+- Lockfile committed + CI uses `npm ci` / `pnpm install --frozen-lockfile`.
+- Typosquats / dependency confusion — eyeball `@yourco/*` scoped deps against a private registry.

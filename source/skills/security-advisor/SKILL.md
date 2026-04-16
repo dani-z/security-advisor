@@ -38,7 +38,7 @@ When the user types `/security-advisor` (with or without arguments), run this sk
 - `/security-advisor --llm` — only scan LLM/AI touchpoints (prompt injection, tool calling, output handling, cost)
 - `/security-advisor --deps` — only scan dependencies for known CVEs
 - `/security-advisor --secrets` — only scan for leaked/mishandled secrets and env config
-- `/security-advisor --scope <area>` — focus on a specific area (e.g. `--scope auth`, `--scope webhooks`, `--scope admin`)
+- `/security-advisor --scope <area>` — focus on a specific area (e.g. `--scope auth`, `--scope webhooks`, `--scope admin`, `--scope cicd`, `--scope uploads`, `--scope graphql`, `--scope api`, `--scope money`)
 - `/security-advisor --report` — also write findings to `.security-advisor/report-{date}.md` in the repo
 
 Parse arguments leniently. `--full` is combinable with `--llm`, `--deps`, etc. If nothing is passed, default is diff-scope.
@@ -49,7 +49,7 @@ Parse arguments leniently. `--full` is combinable with `--llm`, `--deps`, etc. I
 
 1. **Agents Rule of Two** (Anthropic, Nov 2025). Any code path that combines two or more of {untrusted input, sensitive tool or data, external communication} is the danger zone. Spend your review budget there. A public unauthenticated endpoint that reads user input, queries the database, and sends email hits all three — it gets scrutiny first.
 
-2. **PoC discipline.** A finding is not a finding until you can say *file:line* and walk through a 3-to-5 step attack path. "This looks risky" is a hunch. "A user who signs up with email X then calls action Y with parameter Z can read any other user's QR code" is a finding. If you cannot produce the exploit path, drop the finding — the user's time is more valuable than your completeness.
+2. **PoC discipline.** A finding is not a finding until you can say *file:line* and walk through a 3-to-5 step attack path. "This looks risky" is a hunch. "A user who signs up with email X then calls action Y with parameter Z can read another tenant's record" is a finding. If you cannot produce the exploit path, drop the finding — the user's time is more valuable than your completeness.
 
 3. **LLMs are good at the stuff static tools miss.** Business logic, IDOR, cross-file auth reasoning, multi-tenant leakage, prompt injection, intent mismatches between a comment and the code it describes. LLMs are *worse* than Semgrep/CodeQL at taint flow at scale and worse than OSV at exact CVE matching. Play to strengths: reason about meaning and context. Delegate the mechanical stuff to tools when they exist (`bun outdated`, `npm audit`, `gitleaks`).
 
@@ -82,17 +82,20 @@ Detection signals:
 package.json with "next"           → Next.js  → read references/stack-nextjs.md
 package.json with "react" | "react-native" | "expo" → React → read references/stack-react.md (always, alongside any framework reference)
 package.json with "express"/"fastify"/"hono" → Node.js → read references/stack-nodejs-general.md
-package.json with @ai-sdk/* | openai | @anthropic-ai/* | openrouter → LLM app → read references/stack-llm-apps.md
+package.json with @ai-sdk/* | openai | @anthropic-ai/* | openrouter | @modelcontextprotocol/* → LLM app → read references/stack-llm-apps.md
 package.json with "prisma"         → Prisma  → patterns in stack-nextjs.md apply
 requirements.txt / pyproject.toml  → Python  → read references/stack-python.md
 Gemfile | go.mod | Cargo.toml      → note stack, apply general OWASP principles
+
+ANY HTTP server (Node, Python, Go, Rails, etc.)  → read references/stack-api-surface.md (CSRF, CORS, NoSQL, SSTI, XXE, uploads, OAuth, sessions, GraphQL, WebSockets, business-logic)
+.github/workflows/ | Dockerfile | docker-compose | *.tf | k8s/ | helm/  → read references/stack-cicd-supply-chain.md (GH Actions, containers, IaC, supply chain — OWASP 2025 A03)
 ```
 
 Always read these two, regardless of stack:
 - [references/research-basis.md](references/research-basis.md) — the *why* behind every check, with citations
 - [references/false-positive-rules.md](references/false-positive-rules.md) — what NOT to flag
 
-A Node/TS project often needs both `stack-nextjs.md` and `stack-nodejs-general.md` — read both. Any React-based app (Next.js, Vite, Remix, Astro+React, CRA, Expo, React Native) also needs `stack-react.md` for UI-layer concerns (XSS escape hatches, token storage, open redirects, env-var exposure). An LLM app always also needs `stack-llm-apps.md`. When in doubt, err on reading one more reference rather than missing one.
+A Node/TS project often needs both `stack-nextjs.md` and `stack-nodejs-general.md` — read both. Any React-based app (Next.js, Vite, Remix, Astro+React, CRA, Expo, React Native) also needs `stack-react.md` for UI-layer concerns (XSS escape hatches, token storage, open redirects, env-var exposure). An LLM app always also needs `stack-llm-apps.md`. Every web app with HTTP endpoints benefits from `stack-api-surface.md` — the cross-framework classes (CSRF, CORS, NoSQL, SSTI, XXE, file upload, ZIP Slip, GraphQL, OAuth depth) live there. Any repo shipping to production should also load `stack-cicd-supply-chain.md` for supply-chain + infra checks (OWASP 2025 A03 is Top 3 specifically because of 2024-2025 incidents). When in doubt, err on reading one more reference rather than missing one.
 
 ### Phase 2 — Draw the attack surface map
 
@@ -103,20 +106,25 @@ Target categories:
 - **Auth boundary** — where does an unauthenticated request become authenticated? (better-auth, next-auth, custom JWT, session cookie?)
 - **Privileged endpoints** — admin-only, org-admin-only, staff-only.
 - **Webhook receivers** — Stripe, GitHub, Svix, custom. These accept outside HTTP from services that aren't users.
-- **File uploads** — anywhere `multipart/form-data` or blob storage is touched.
-- **LLM entry points** — any code that constructs a prompt or a tool schema.
+- **File uploads** — anywhere `multipart/form-data` or blob storage is touched. Also archive-extraction code (ZIP Slip).
+- **LLM entry points** — any code that constructs a prompt or a tool schema. Note MCP servers loaded, if any.
 - **External fetch points** — `fetch(url)` where `url` could be user-derived (SSRF surface).
+- **Auth flow surfaces** — OAuth callbacks, password reset endpoints, MFA enrolment/verification, session-rotation points.
+- **XML / template / NoSQL parsers** — XXE, SSTI, NoSQL-injection candidates.
+- **GraphQL / WebSocket endpoints** — introspection + depth/complexity, WS handshake auth.
+- **CI/CD surface** — `.github/workflows/` with `pull_request_target`, self-hosted runners, OIDC-to-cloud roles.
+- **Container / infra surface** — Dockerfile/K8s/Terraform files present → read in Pass H.
 
 Output format (concise, one line each):
 
 ```
 ATTACK SURFACE — quick map
 ──────────────────────────
-PUBLIC       GET  /q/[slug]              → redirect + scan logging        (src/app/q/[slug]/route.ts:1)
-PUBLIC       POST /api/auth/[...all]     → better-auth handler            (src/app/api/auth/[...all]/route.ts:3)
-AUTH         POST /api/ai/chat           → LLM chat, org-scoped + plan    (src/app/api/ai/chat/route.ts)
-WEBHOOK      POST (via better-auth)      → Stripe events                  (in better-auth stripe plugin)
-ACTIONS      38 server actions           → src/actions/*                  (all should use auth client wrapper)
+PUBLIC       GET  /<public-route>         → unauthenticated handler       (<file>:<line>)
+PUBLIC       POST /api/auth/[...all]      → auth library handler          (<file>:<line>)
+AUTH         POST /api/<authed-endpoint>  → authenticated, scoped         (<file>:<line>)
+WEBHOOK      POST /api/webhook/<provider> → signed events from <provider> (<file>:<line>)
+ACTIONS      N server actions             → <actions dir>/*               (all should use an authed wrapper)
 ...
 ```
 
@@ -127,18 +135,35 @@ Then ask the user: "This look right? Anything I missed?" before scanning. They k
 Run the passes relevant to the detected stack and the user's chosen scope. Each pass is a deliberate hunt with a specific hypothesis, not a grep-spree. Announce the pass before starting it: *"Now looking for server actions that forgot to re-authenticate..."*. This lets the user interrupt if you're wasting time.
 
 **Pass A — Auth model integrity.** Find places where the trust boundary leaks.
-- Every server action must re-authenticate inside the action (server actions are public POST endpoints; page-level redirects do not protect them). In next-safe-action setups, the action should use an authed client wrapper (e.g. `authActionClient`, `orgActionClient`), never a bare `createSafeActionClient()` one.
-- Every tenant-scoped query must source the tenant ID from the session, never from the request body. Grep for `{ where: { userId` / `{ where: { organizationId` and verify the value comes from `session.user.id` or a resolver like `getOrganizationContextForCurrentUser`, not from the client.
-- IDOR patterns — `prisma.*.findFirst({ where: { id } })` where `id` is user-supplied and there is no additional ownership check.
+- Every server action / RPC handler / mutation endpoint must re-authenticate inside itself (these are public POST endpoints; page-level redirects or client-side guards do not protect them). In `next-safe-action` (or equivalent) setups, the handler should be wrapped by an authed client (whatever the project names it — e.g. an `auth*Client` / `org*Client` / `protectedProcedure`-style wrapper), never by a bare unauthenticated client.
+- Every tenant-scoped query must source the tenant ID from the session, never from the request body. Grep for tenant-scoping keys used by the project (e.g. `userId`, `organizationId`, `teamId`, `workspaceId`) in query filters, and verify the value comes from the session / a server-side context resolver, not from client input.
+- IDOR patterns — ORM lookups like `<orm>.<model>.findFirst/findUnique({ where: { id } })` (Prisma, Drizzle, TypeORM, SQLAlchemy, ActiveRecord, etc.) where `id` is user-supplied and there is no additional ownership check.
 - Admin checks — any admin-only path gated only by a client-side flag is a finding.
 - See `references/stack-nextjs.md` → "Auth" for the fuller playbook.
 
 **Pass B — Trust boundary crossings.** Every time data crosses from untrusted to trusted, something can go wrong.
 - Webhook handlers must verify signatures with the raw request body, not parsed JSON. Stripe in Next.js App Router: `await req.text()` first, then `stripe.webhooks.constructEvent(rawBody, sig, secret)`.
-- Any `fetch(url)` where `url` is constructed from user input is potential SSRF — allowlist host + protocol or drop the feature.
+- Any `fetch(url)` where `url` is constructed from user input is potential SSRF — allowlist host + protocol or drop the feature. Also check for DNS rebinding + redirect-based SSRF bypass + IMDSv1 on EC2 (see `stack-api-surface.md §12`).
 - Any externally-fetched document that then becomes context for an LLM call (RAG) is a prompt-injection vector.
+- NoSQL queries built from request bodies without type coercion (`$ne`/`$gt` operator injection).
+- Template engines (`Handlebars.compile`, `ejs.render`, `Jinja2.from_string`) where user input is the template body — SSTI / RCE.
+- XML parsers (`lxml`, `xml.etree`, `xml2js`) on user XML without entity-expansion disabled — XXE.
+- File uploads — MIME/extension/size/magic-byte/SVG/polyglot checks; archive extraction guarded against ZIP Slip.
+- Host / X-Forwarded-Host header used in reset-link construction, redirects, cache keys, or log attribution.
+- CSRF defences on cookie-authenticated endpoints (SameSite, Origin check, token).
+- CORS config: reflected origin + credentials = critical cross-origin read surface.
+- See `stack-api-surface.md` for the full per-class playbook.
 
-**Pass C — Known-CVE surface.** Cross-reference installed dependency versions against the 2025 CVE list (see `stack-nextjs.md` for the current list: CVE-2025-29927, -55182, -55184, -55183, -66478, etc.). Run `bun outdated` / `npm audit` / `pnpm audit` / `pip audit` if available — treat its output as data, not gospel. LLM reading the `package.json` + lockfile catches mis-pinned transitives the tool misses.
+**Pass C — Known-CVE surface + supply chain.** Cross-reference installed dependency versions against the 2025 CVE list (see `stack-nextjs.md` for the current list: CVE-2025-29927, -55182, -55184, -55183, -66478, etc.). Run `bun outdated` / `npm audit` / `pnpm audit` / `pip audit` if available — treat its output as data, not gospel. LLM reading the `package.json` + lockfile catches mis-pinned transitives the tool misses.
+
+Also check supply-chain posture (OWASP 2025 A03, Top 3):
+- Typosquat / dependency-confusion candidates in `package.json` / `requirements.txt`.
+- Lockfile committed and CI uses frozen install (`npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable`).
+- `.npmrc` with `ignore-scripts=true` or scoped-registry for internal packages.
+- GitHub Actions: third-party `uses:` pinned by SHA not tag (the tj-actions/changed-files March 2025 lesson); `pull_request_target` + PR-code checkout combo; shell `${{ github.event.* }}` injection.
+- Dockerfile: secrets in ARG/COPY layers, non-root USER in final image, SHA-pinned base, `.dockerignore` covers `.env` / `.git` / keys.
+- K8s / Terraform: RBAC, privileged pods, open security groups, public S3, IMDSv1 on EC2.
+See `stack-cicd-supply-chain.md` for the full playbook.
 
 **Pass D — Secrets & config hygiene.**
 - Any `.env` tracked by git? (`git ls-files '*.env' '.env.*' | grep -v example`)
@@ -153,7 +178,31 @@ Run the passes relevant to the detected stack and the user's chosen scope. Each 
 - Cost / token caps per user or per org? OWASP LLM #10 Unbounded Consumption is new in 2025 and it is a real DoS-amplified-by-bill vector.
 - System prompt leakage — does the LLM response or an error message echo the system prompt? OWASP LLM #6 System Prompt Leakage (new in 2025).
 
-**Pass F — Framework-specific hot spots.** Read the detected reference file and run its checklist. For Next.js: middleware bypass (CVE-2025-29927), Server Function deserialization (CVE-2025-55182), mass-assignment in Prisma `data: { ...body }`, CSP/HSTS/security-header audit, better-auth misconfigurations. For Python: pickle/YAML load, Django middleware order.
+**Pass F — Framework-specific hot spots.** Read the detected reference file and run its checklist. For Next.js: middleware bypass (CVE-2025-29927), Server Function deserialization (CVE-2025-55182), mass-assignment in Prisma `data: { ...body }`, CSP/HSTS/security-header audit, better-auth misconfigurations, server-action `allowedOrigins`. For Python: pickle/YAML load, Django middleware order, Flask `debug=True`, FastAPI missing `response_model`, SSTI in Jinja2.
+
+**Pass G — Auth-flow deep check** (when `--scope auth` or the app has OAuth / password reset / MFA).
+- OAuth: `state` generated + verified, PKCE for public clients, `nonce` for OIDC, `id_token` signature/audience/issuer verified, `redirect_uri` exact-match.
+- Password reset: random token (`crypto.randomBytes(32)`, NOT `Math.random()`), expiry ≤ 1h, one-time consumption via atomic `UPDATE`, hashed at rest, email built from canonical APP_URL not `Host` header.
+- Session: rotated on login, invalidated on password change, absolute + idle timeout, entropy sufficient.
+- MFA: backup codes entropy + one-time, no SMS-only fallback for high-value accounts, no "skip MFA after reset", enrolment requires step-up auth.
+- Timing safety on login path (constant-time password compare even for unknown users, no user-enumeration via response text or timing).
+See `stack-api-surface.md §15-§19` for detail.
+
+**Pass H — CI/CD & infra** (when `.github/workflows/`, `Dockerfile`, `*.tf`, `k8s/`, `helm/` exist).
+- GH Actions: `pull_request_target` + PR checkout, unpinned third-party actions, shell expression injection via `${{ github.event.* }}`, `GITHUB_TOKEN` permissions, self-hosted runners on public repos.
+- Dockerfile: secrets in ARG/layers (`docker history` exposure), running as root, `.dockerignore` coverage, SHA-pinned base, exposed docker.sock.
+- K8s: `privileged: true`, `hostNetwork`/`hostPID`/`hostPath`, RBAC scope, `runAsNonRoot`, NetworkPolicies.
+- Terraform / IaC: open security groups for DB ports, public S3/GCS, IMDSv1 on EC2, overly broad IAM, unencrypted state.
+See `stack-cicd-supply-chain.md`.
+
+**Pass I — Business logic & money paths** (when the app has payments, balance transfers, coupons, refunds, or order state).
+- Atomic balance updates (`UPDATE … WHERE balance >= X RETURNING`) not read-modify-write.
+- Negative / zero / extreme inputs accepted silently (negative quantity, zero price).
+- Coupon / promo one-use-per-user enforced via DB constraint, not application check.
+- Webhook re-ordering resilience (idempotent + state-machine-aware handlers).
+- Order state-machine enforcement in handlers, not just UI.
+- Currency type safety (fixed-point, never `parseFloat`).
+See `stack-api-surface.md §20`.
 
 ### Phase 4 — Verify before you speak
 

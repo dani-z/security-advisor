@@ -1,6 +1,6 @@
 # security-advisor
 
-![security-advisor — a magnifying glass over a code editor with one line highlighted, set against a grid of shield glyphs](image.png)
+![security-advisor — a magnifying glass over a code editor with one line highlighted, set against a grid of shield glyphs](image.jpg)
 
 A conversational security advisor **for every AI coding agent** — hunts real, exploitable vulnerabilities in your codebase, explains the exploit path, and lets you push back.
 
@@ -32,10 +32,7 @@ It complements `/cso` and similar audit tools rather than replaces them. `/cso` 
 Works with Claude Code, OpenCode, Codex, Cursor, and 40+ other agents:
 
 ```bash
-# Install globally (recommended for a security tool you'll want everywhere)
-npx skills add dani-z/security-advisor -g
-
-# Install into just the current project
+# Interactive install — runs a wizard that asks which agent(s) and whether to install globally or into the current project
 npx skills add dani-z/security-advisor
 
 # Target a specific agent

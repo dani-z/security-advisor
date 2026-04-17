@@ -32,19 +32,27 @@ It complements `/cso` and similar audit tools rather than replaces them. `/cso` 
 Works with Claude Code, OpenCode, Codex, Cursor, and 40+ other agents:
 
 ```bash
+# Install globally (recommended for a security tool you'll want everywhere)
+npx skills add dani-z/security-advisor -g
+
 # Interactive install — runs a wizard that asks which agent(s) and whether to install globally or into the current project
 npx skills add dani-z/security-advisor
 
-# Target a specific agent
+# Target a specific agent, globally
+npx skills add dani-z/security-advisor -g -a claude-code
+npx skills add dani-z/security-advisor -g -a cursor
+npx skills add dani-z/security-advisor -g -a codex
+npx skills add dani-z/security-advisor -g -a opencode
+npx skills add dani-z/security-advisor -g -a gemini
+
+# Install into just the current project (drop the -g flag)
 npx skills add dani-z/security-advisor -a claude-code
-npx skills add dani-z/security-advisor -a cursor
-npx skills add dani-z/security-advisor -a codex
-npx skills add dani-z/security-advisor -a opencode
-npx skills add dani-z/security-advisor -a gemini
 
 # All agents, non-interactive (CI/CD friendly)
 npx skills add dani-z/security-advisor -g --all -y
 ```
+
+`-g` installs to `~/<agent>/skills/` (available across all projects). Without `-g`, the skill installs into `./<agent>/skills/` in the current project so it can be committed alongside your code.
 
 See [skills.sh](https://skills.sh/) or run `npx skills --help` for the full CLI reference.
 
